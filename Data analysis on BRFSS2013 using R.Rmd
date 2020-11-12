@@ -1,0 +1,229 @@
+---
+output:
+  html_document: default
+  pdf_document: default
+---
+---
+title: "Behavioral Risk Factor Surveillance System (BRFSS) - 2013"
+author: "Anoop"
+date: "12/11/2020"
+output: html_document.
+
+# Exploring the BRFSS_2013 Data
+
+# Objective: Data analysis of the dataset BRFSS2013 data for the evaluation of the final assignment as part of the statistics with R by Duke University
+
+# Part 1: Data
+
+# The Behavioral Risk Factor Surveillance System (BRFSS) is a collaborative project between all of the states in the United States (US) and participating US territories and the Centers for Disease Control and Prevention (CDC). 
+
+# The BRFSS objective is to collect uniform, state-specific data on preventive health practices and risk behaviors that are linked to chronic diseases, injuries, and preventable infectious diseases that affect the adult population. Factors assessed by the BRFSS in 2013 include tobacco use, HIV/AIDS knowledge and prevention, exercise, immunization, health status, healthy days - health-related quality of life, health care access, inadequate sleep, hypertension awareness, cholesterol awareness, chronic health conditions, alcohol consumption, fruits and vegetables consumption, arthritis burden, and seatbelt use.
+
+# Since 2011, BRFSS conducts both landline telephone- and cellular telephone-based surveys. In conducting the BRFSS landline telephone survey, interviewers collect data from a randomly selected adult in a household. In conducting the cellular telephone version of the BRFSS questionnaire, interviewers collect data from an adult who participates by using a cellular telephone and resides in a private residence or college housing. Health characteristics estimated from the BRFSS pertain to the non-institutionalized adult population, aged 18 years or older, who reside in the US. In 2013, additional question sets were included as optional modules to provide a measure for several childhood health and wellness indicators, including asthma prevalence for people aged 17 years or younger.
+
+
+# Required packages
+```{r}
+r = getOption("repos")
+r["CRAN"] = "http://cran.us.r-project.org"
+options(repos = r)
+```
+
+```{r}
+
+install.packages("dplyr")
+install.packages("ggplot2")
+install.packages("rio")
+library(ggplot2)
+library(dplyr)
+library(rio)
+```
+
+# Loading dataset
+```{r}
+
+download.file("http://stat.duke.edu/~cr173/Sta102_Sp16/Proj/brfss2013.RData",  destfile="brfss2013.RData")
+
+load("brfss2013.RData")
+```
+
+# PART 2: Research questions
+
+# Q1: What is the health Status of the population by Age,Sex and activity ?
+# Q2: What are different behaviours and habits which might cause poor health ? 
+# Q3: What is correlation between behaviours and life styles on the chronic health conditions ?
+
+# Part 3: Exploratory Data Analysis
+
+```{r}
+hlthpmp <- select(brfss2013, physhlth, menthlth,poorhlth) %>% filter(!is.na(physhlth),!is.na(menthlth),!is.na(poorhlth))
+
+hist(hlthpmp$physhlth, main="Physical Health", xlab="Physical Health",col=rainbow(5))
+
+hist(hlthpmp$menthlth, main="Mental Health", xlab="Mental Health",col=rainbow(5))
+
+
+```
+
+#Q2: Behaviours and their implications on the human health .How exercise,smoking and sleeping time causes obesity,diabetes,high blood pressure,high cholesterol level,cardiovascular disorder and depression in respondents. Plots show their association.Behaviours and Habits
+
+#Sol: Exercise can improves Health by reducing obesity,high blood pressure and cholesterol.
+```{r}
+exer <- brfss2013 %>% dplyr::select(exerany2,bphigh4,sex) %>% dplyr::filter(bphigh4 %in% c("Yes","No"))
+
+levels(exer$bphigh4) <- c("Yes, been told blood pressure high","Yes, but female told only during pregnancy","No, never been told blood pressure high","Yes, been told borderline or pre-hypertensive")
+
+ggplot(exer,aes(x = exerany2, fill = sex)) + geom_bar() +facet_grid(~bphigh4) + coord_flip() + ggtitle(" Exercise vs High Blood Pressure")
+
+```
+
+# Sleeping time and its implications on Health. Here a comparison is shown
+
+
+```{r}
+sleep <- brfss2013 %>% select(sleptim1,poorhlth, physhlth)
+sleep <- subset(sleep, sleptim1 >= 0 & sleptim1 < 25, select=c(sleptim1, poorhlth, physhlth))
+sleep = within(sleep, {sleepstatus = ifelse(sleptim1 >= 7 & sleptim1 < 10, "opt", "non-op")})
+sleep_poorhlth <- subset(sleep, poorhlth >= 0 & sleptim1 < 1000, select=c(sleptim1, poorhlth, sleepstatus))
+sleep_physhlth <- subset(sleep, physhlth >= 0 & sleptim1 < 1000, select=c(sleptim1, physhlth, sleepstatus))
+ggplot(data = sleep_poorhlth, aes(x =sleptim1, y= poorhlth)) + geom_point()
+
+ggplot(data = sleep_physhlth, aes(x =sleptim1, y= physhlth)) + geom_point()
+
+```
+
+# Poor Health is also associated with chronic disorders. These are Diabetes,Heart disease,High B.P,High cholesterol and depressive disorders.
+
+```{r}
+disease <- select(brfss2013,genhlth,sex,X_age_g, X_rfbmi5,X_bmi5cat,diabete3,cvdinfr4,bphigh4,addepev2,exerany2,toldhi2,smoke100,sleptim1 ) %>%          filter(!is.na(genhlth),!is.na(sex),!is.na(exerany2),!is.na(X_age_g),!is.na(toldhi2),!is.na(smoke100),!is.na(diabete3),!is.na(addepev2),!is.na(cvdinfr4),!is.na(bphigh4),!is.na(X_rfbmi5),!is.na(X_bmi5cat),!is.na(sleptim1))
+```
+
+# Diabetes Prevalence and General Health 
+
+```{r}
+table(disease$diabete3,disease$X_age_g)
+```
+```{r}
+diabete <- brfss2013 %>%
+     filter(!is.na(diabete3),!is.na(genhlth)) %>%
+     group_by(genhlth,diabete3) %>%
+     summarise(n = n()) %>%
+     mutate(pct_total_stacked = n/sum(n), 
+     position_stacked = cumsum(pct_total_stacked)-0.5*pct_total_stacked,
+     position_n = cumsum(n)-0.5*n)
+```
+```{r}
+ggplot(diabete, aes(genhlth), y=n) +
+    geom_bar(aes(fill = diabete3, weight = n),  width = .7, color="black") +
+    geom_text(aes(label=n, y=position_n), color="white")
+    
+  ggplot(diabete, aes(x=genhlth, y=pct_total_stacked, fill=diabete3)) +
+    geom_bar(stat='identity',  width = .7, color="black")+
+    geom_text(aes(label=ifelse(diabete3 == 'Yes', paste0(sprintf("%.0f",                                                 pct_total_stacked*100),"%"),""), y=position_stacked), color="white") +
+    coord_flip() +
+    scale_y_continuous() +
+    labs(y="", x="")
+rm(diabete)
+```
+
+# Q2: Stress and Depression are associated with work,environments and behaviours.The habits seem to trigger chronic disorders e.g; high blood pressure, diabetes and cardiovascular diseases.Correlation to be calculated under Question 3.
+
+```{r}
+prop.table(ftable(table(disease$addepev2,disease$X_age_g)))*100
+qplot(disease$addepev2)
+qplot(X_age_g, data = disease, fill=addepev2,xlab="Depression",ylab ="Prevalence",main ="Heart Disease vs age")  
+ggplot(disease,aes(x = addepev2, fill = diabete3)) + geom_bar() +facet_grid(~addepev2) + coord_flip() +              ggtitle(" Depression Vs Diabetes disease") 
+```
+
+# Q3: Analyzing Association of behavioural outcomes with the causes by Linear Regression.
+
+```{r}
+vars <- names(brfss2013) %in% c("sleptim1","cvdinfr4","addepev2","diabete3","bphigh4","toldhi2",
+                                                                  "smoke100","X_rfbmi5")
+hlthsub2 <- brfss2013[vars] 
+names(hlthsub2)
+MissingData <- function(x){sum(is.na(x))/length(x)*100}
+apply(hlthsub2, 2, MissingData)
+```
+```{r}
+
+summary(hlthsub2)
+summary(hlthsub2$X_rfbmi5)
+```
+```{r}
+hlthsub2$X_rfbmi5 <- replace(hlthsub2$X_rfbmi5, which(is.na(hlthsub2$X_rfbmi5)), "Yes")
+```
+
+```{r}
+summary(hlthsub2$X_rfbmi5)
+summary(hlthsub2$smoke100)
+hlthsub2$addepev2 <- replace(hlthsub2$addepev2, which(is.na(hlthsub2$addepev2)), "Yes")
+summary(hlthsub2$addepev2)
+hlthsub2$diabete3 <- replace(hlthsub2$diabete3, which(is.na(hlthsub2$diabete3)), "Yes")
+summary(hlthsub2$diabete3)
+hlthsub2$bphigh4 <- replace(hlthsub2$bphigh4, which(is.na(hlthsub2$bphigh4)), "No")
+summary(hlthsub2$bphigh4)
+summary(hlthsub2$sleptim1)
+mean(hlthsub2$sleptim1,na.rm = T)
+hlthsub2$sleptim1 <- replace(hlthsub2$sleptim1, which(is.na(hlthsub2$sleptim1)), 7)
+summary(hlthsub2$sleptim1)
+summary(hlthsub2$toldhi2)
+hlthsub2$toldhi2 <- replace(hlthsub2$toldhi2, which(is.na(hlthsub2$toldhi2)), "No")
+summary(hlthsub2$toldhi2)
+summary(hlthsub2$cvdinfr4)
+hlthsub2$cvdinfr4 <- replace(hlthsub2$cvdinfr4, which(is.na(hlthsub2$cvdinfr4)), "Yes")
+summary(hlthsub2$cvdinfr4)
+hlthsub2$cvdinfr4 <- replace(hlthsub2$cvdinfr4, which(is.na(hlthsub2$cvdinfr4)), "Yes")
+summary(hlthsub2$cvdinfr4)
+hlthsub2$cvdinfr4 <- replace(hlthsub2$cvdinfr4, which(is.na(hlthsub2$cvdinfr4)), "Yes")
+summary(hlthsub2$cvdinfr4)
+```
+
+```{r}
+
+install.packages("Hmisc")
+library(Hmisc)
+```
+
+# Converting factors to numerics for analysis.
+
+```{r}
+hlthsub2$addepev2 <- ifelse(hlthsub2$addepev2=="Yes", 1, 0)
+hlthsub2$cvdinfr4 <- ifelse(hlthsub2$cvdinfr4=="Yes", 1, 0)
+hlthsub2$smoke100 <- ifelse(hlthsub2$smoke100=="Yes", 1, 0)
+hlthsub2$diabete3 <- ifelse(hlthsub2$diabete3=="Yes", 1, 0)
+hlthsub2$toldhi2 <- ifelse(hlthsub2$toldhi2 =="Yes", 1, 0)
+hlthsub2$bphigh4 <- ifelse(hlthsub2$bphigh4=="Yes", 1, 0)
+hlthsub2$X_rfbmi5 <- ifelse(hlthsub2$X_rfbmi5=="Yes", 1, 0)
+
+```
+
+# Checking Missing Values
+
+```{r}
+MissingData <- function(x){sum(is.na(x))/length(x)*100}
+apply(hlthsub2, 2, MissingData)
+
+```
+
+#Q3: Finding correlation and plotting a corrplot.Fitting model by logistic regression using binomial method. Plotting correlations. 
+
+```{r}
+install.packages("corrplot")
+library(corrplot)
+```
+```{r}
+M <- cor(hlthsub2)
+corrplot(M, method="number",pch=23,col=rainbow(7))
+summary(M)
+```
+
+# Correlation and Fitting of the Models,cardio,depression and diabetes  with other variables. A plot of a fit model for cardiovascular disorder against all variables is drawn.
+
+```{r}
+
+plot(glm(formula = cvdinfr4 ~ ., family = "binomial", data = hlthsub2))
+```
+
+### END
+
